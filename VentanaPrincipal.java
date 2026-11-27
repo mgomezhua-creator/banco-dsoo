@@ -6,45 +6,71 @@ import java.util.Locale;
 import java.util.function.Consumer;
 
 /*
-Laboratorio 2: DSOO(Lab F)
+Laboratorio 3: DSOO(Lab F)
 Docente: EDWAR ABRIL SAIRE PERALTA
 Integrantes:
 -MELANY YARITZA GOMEZ HUAMAN
 -KAROL ESTEFANY MAMANI CUBA
 */
 public class VentanaPrincipal extends JFrame {
-    private Banco banco;
 
+    // Titulos de las pestanas (se usan tambien para habilitarlas/bloquearlas segun el rol)
+    private static final String TAB_LOGIN = "Inicio de Sesión";
+    private static final String TAB_CLIENTES = "Clientes";
+    private static final String TAB_EMPLEADOS = "Empleados";
+    private static final String TAB_CUENTAS = "Cuentas";
+    private static final String TAB_TRANSACCIONES = "Depósitos y Retiros";
+    private static final String TAB_GESTION_TRANS = "Gestión de Transacciones";
+    private static final String TAB_OPER_CLIENTE = "Operaciones del Cliente";
+    private static final String TAB_CONSULTAS = "Saldo y Movimientos";
+    private static final String TAB_BUSCAR = "Buscar";
+    private static final String TAB_USUARIOS = "Gestión de Usuarios";
+
+    private Banco banco;
+    private JTabbedPane pestanas;
+    private Usuario usuarioActual;   // null = nadie ha iniciado sesion
+
+    private PanelLogin panelLogin;
+    private PanelGestionUsuarios panelUsuarios;
     private PanelRegistroCliente panelClientes;
     private PanelRegistroEmpleado panelEmpleados;
     private PanelCrearCuenta panelCuentas;
 
     public VentanaPrincipal() {
         banco = new Banco();
+        cargarUsuariosPorDefecto();
         setTitle("Sistema Bancario - POO Swing");
-        setSize(960, 580);
+        setSize(1200, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
+        panelLogin = new PanelLogin(banco, this::aplicarPermisos);
+        panelUsuarios = new PanelGestionUsuarios(banco, () -> usuarioActual);
         panelClientes = new PanelRegistroCliente(banco);
         panelEmpleados = new PanelRegistroEmpleado(banco);
         panelCuentas = new PanelCrearCuenta(banco);
 
-        JTabbedPane pestanas = new JTabbedPane();
+        pestanas = new JTabbedPane();
+
+        // --- Acceso al sistema (siempre habilitada) ---
+        pestanas.addTab(TAB_LOGIN, panelLogin);
 
         // --- Gestion de personas y cuentas ---
-        pestanas.addTab("Clientes", panelClientes);
-        pestanas.addTab("Empleados", panelEmpleados);
-        pestanas.addTab("Cuentas", panelCuentas);
+        pestanas.addTab(TAB_CLIENTES, panelClientes);
+        pestanas.addTab(TAB_EMPLEADOS, panelEmpleados);
+        pestanas.addTab(TAB_CUENTAS, panelCuentas);
 
         // --- Operaciones del empleado (ventanilla) ---
-        pestanas.addTab("Depósitos y Retiros", crearPanelTransacciones());
-        pestanas.addTab("Gestión de Transacciones", crearPanelGestionTransacciones());
+        pestanas.addTab(TAB_TRANSACCIONES, crearPanelTransacciones());
+        pestanas.addTab(TAB_GESTION_TRANS, crearPanelGestionTransacciones());
 
         // --- Operaciones del cliente y consultas ---
-        pestanas.addTab("Operaciones del Cliente", crearPanelOperacionesCliente());
-        pestanas.addTab("Saldo y Movimientos", crearPanelConsultas());
-        pestanas.addTab("Buscar", new PanelBusqueda(banco));
+        pestanas.addTab(TAB_OPER_CLIENTE, crearPanelOperacionesCliente());
+        pestanas.addTab(TAB_CONSULTAS, crearPanelConsultas());
+        pestanas.addTab(TAB_BUSCAR, new PanelBusqueda(banco));
+
+        // --- Administracion de usuarios (solo Administrador) ---
+        pestanas.addTab(TAB_USUARIOS, panelUsuarios);
 
         // Al entrar a una pestaña con tabla, se vuelve a leer el Banco para mostrar datos al día
         pestanas.addChangeListener(e -> {
@@ -52,9 +78,67 @@ public class VentanaPrincipal extends JFrame {
             if (sel == panelClientes) panelClientes.actualizar();
             else if (sel == panelEmpleados) panelEmpleados.actualizar();
             else if (sel == panelCuentas) panelCuentas.actualizar();
+            else if (sel == panelUsuarios) panelUsuarios.actualizar();
         });
 
         add(pestanas);
+
+        // Sin sesion iniciada: todo queda bloqueado excepto el inicio de sesion
+        aplicarPermisos(null);
+    }
+
+    // =====================================================================
+    //  Usuarios y control de acceso (Lab 03)
+    // =====================================================================
+
+    /** Usuarios de prueba: uno de cada tipo y uno inactivo (para demostrar que no puede ingresar). */
+    private void cargarUsuariosPorDefecto() {
+        banco.agregarUsuario(new UsuarioCliente("cliente", "1234", true));
+        banco.agregarUsuario(new UsuarioEmpleado("empleado", "1234", true));
+        banco.agregarUsuario(new UsuarioAdministrador("admin", "admin123", true));
+        banco.agregarUsuario(new UsuarioCliente("cliente_inactivo", "1234", false));
+    }
+
+    /**
+     * Principio de minimos privilegios: habilita SOLO las pestanas que el tipo de usuario
+     * necesita. Se llama al iniciar sesion (usuario) y al cerrarla (null).
+     */
+    private void aplicarPermisos(Usuario usuario) {
+        usuarioActual = usuario;
+
+        // 1) Se bloquea todo...
+        for (int i = 0; i < pestanas.getTabCount(); i++) {
+            pestanas.setEnabledAt(i, false);
+        }
+        // 2) ...menos el inicio de sesion
+        habilitar(TAB_LOGIN);
+
+        // 3) Se habilita segun el tipo real del usuario
+        if (usuario instanceof UsuarioAdministrador) {
+            for (int i = 0; i < pestanas.getTabCount(); i++) {      // acceso total
+                pestanas.setEnabledAt(i, true);
+            }
+        } else if (usuario instanceof UsuarioEmpleado) {
+            habilitar(TAB_CLIENTES, TAB_CUENTAS, TAB_TRANSACCIONES, TAB_GESTION_TRANS, TAB_CONSULTAS, TAB_BUSCAR);
+        } else if (usuario instanceof UsuarioCliente) {
+            habilitar(TAB_OPER_CLIENTE, TAB_CONSULTAS);
+        }
+
+        // Se vuelve a la pestana de inicio de sesion (ahi se ven los permisos del usuario)
+        pestanas.setSelectedIndex(pestanas.indexOfTab(TAB_LOGIN));
+
+        setTitle("Sistema Bancario - POO Swing" + (usuario == null ? ""
+                : "   |   Sesión: " + usuario.getNombreUsuario() + " (" + usuario.getClass().getSimpleName() + ")"));
+    }
+
+    /** Habilita las pestanas con los titulos indicados. */
+    private void habilitar(String... titulos) {
+        for (String titulo : titulos) {
+            int indice = pestanas.indexOfTab(titulo);
+            if (indice >= 0) {
+                pestanas.setEnabledAt(indice, true);
+            }
+        }
     }
 
     // =====================================================================
