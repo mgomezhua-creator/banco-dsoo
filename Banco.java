@@ -30,10 +30,12 @@ public class Banco {
     private final ArrayList<Empleado> empleados;
     private final LinkedList<Cuenta> cuentas;
     private int contadorTransacciones;
+    private final ArrayList<Usuario> usuarios;
 
     public Banco() {
         this.clientes = new LinkedList<>();
         this.empleados = new ArrayList<>();
+        this.usuarios = new ArrayList<>();
         this.cuentas = new LinkedList<>();
         this.contadorTransacciones = 0;
     }
@@ -331,6 +333,48 @@ public class Banco {
         if (t.getEmpleado() != null) {
             t.getEmpleado().quitarTransaccion(t);
         }
+    }
+
+    // =====================================================================
+    //  USUARIOS Y PERMISOS: agregar, buscar, autenticar, eliminar, listar
+    // =====================================================================
+
+     public boolean agregarUsuario(Usuario u) {
+        if (u == null) {
+             throw new IllegalArgumentException("El usuario no puede ser nulo.");
+        }
+        if (buscarUsuario(u.getNombreUsuario()) != null) {
+             throw new IllegalArgumentException("Ya existe un usuario con ese nombre.");
+         }
+        usuarios.add(u);
+        return true;
+    }
+
+    public Usuario buscarUsuario(String nombreUsuario) {
+        String clave = texto(nombreUsuario);
+        for (Usuario u : usuarios) {
+            if (u.getNombreUsuario().equalsIgnoreCase(clave)) return u;
+         }
+         return null;
+    }
+
+    public Usuario autenticar(String user, String pass) {
+        for (Usuario u : usuarios) {
+            if (u.login(user, pass)) return u;
+        }
+        return null;
+    }
+
+    public boolean eliminarUsuario(String nombreUsuario) {
+        Usuario encontrado = buscarUsuario(nombreUsuario);
+        if (encontrado == null) {
+             throw new IllegalArgumentException("Usuario no encontrado.");
+        }
+         return usuarios.remove(encontrado);
+    }
+
+    public List<Usuario> getUsuarios() {
+        return Collections.unmodifiableList(usuarios);
     }
 
     // =====================================================================
